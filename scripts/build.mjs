@@ -18,7 +18,23 @@ export function validateWorkspace(value) {
   }
   return value;
 }
-export const escapeHtml = value => String(value).replace(/[&<>"']/g, char => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[char]));
+export const escapeHtml = value => {
+    let result = '';
+    const str = String(value);
+    let lastIndex = 0;
+    for (let i = 0; i < str.length; i++) {
+        const code = str.charCodeAt(i);
+        if (code === 38) { result += str.substring(lastIndex, i) + '&amp;'; lastIndex = i + 1; }
+        else if (code === 60) { result += str.substring(lastIndex, i) + '&lt;'; lastIndex = i + 1; }
+        else if (code === 62) { result += str.substring(lastIndex, i) + '&gt;'; lastIndex = i + 1; }
+        else if (code === 34) { result += str.substring(lastIndex, i) + '&quot;'; lastIndex = i + 1; }
+        else if (code === 39) { result += str.substring(lastIndex, i) + '&#39;'; lastIndex = i + 1; }
+    }
+    if (lastIndex < str.length) {
+        result += str.substring(lastIndex);
+    }
+    return result;
+};
 const href = (workspace, action) => `https://freetwai.com/#guilds/${workspace.guild_key}/${action}`;
 export function renderWorkspace(workspace) {
   validateWorkspace(workspace);
@@ -40,7 +56,18 @@ export async function build(root = process.cwd(), sourceSha) {
   if (!/^[a-f0-9]{40}$/.test(sha)) throw new Error('Expected an exact source SHA');
   const output = resolve(root, 'dist');
   await mkdir(output, {recursive: true});
-  const serialized = JSON.stringify(workspace).replaceAll('<', '\\u003c').replaceAll('\u2028', '\\u2028').replaceAll('\u2029', '\\u2029');
+
+  let serialized = '';
+  const jsonStr = JSON.stringify(workspace);
+  let lastIndex = 0;
+  for (let i = 0; i < jsonStr.length; i++) {
+      const code = jsonStr.charCodeAt(i);
+      if (code === 60) { serialized += jsonStr.substring(lastIndex, i) + '\\u003c'; lastIndex = i + 1; }
+      else if (code === 8232) { serialized += jsonStr.substring(lastIndex, i) + '\\u2028'; lastIndex = i + 1; }
+      else if (code === 8233) { serialized += jsonStr.substring(lastIndex, i) + '\\u2029'; lastIndex = i + 1; }
+  }
+  if (lastIndex < jsonStr.length) serialized += jsonStr.substring(lastIndex);
+
   await writeFile(resolve(output, 'index.html'), renderWorkspace(workspace));
   await writeFile(resolve(output, 'site.js'), `const workspace = ${serialized};\nconst sourceSha = ${JSON.stringify(sha)};\n` + await readFile(resolve(root, 'src/site.js'), 'utf8'));
   await copyFile(resolve(root, 'src/style.css'), resolve(output, 'style.css'));
